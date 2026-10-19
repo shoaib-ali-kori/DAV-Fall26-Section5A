@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAV Lab 8 - Task 2: Two Penguin Charts</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 28px; color: #222; }
+    h1 { margin-bottom: 6px; }
+    h2 { margin-top: 30px; }
+    svg { display: block; max-width: 100%; overflow: visible; }
+    .answer { color: #d71920; font-weight: 700; }
+    .axis text { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Task 2: Two Penguin Charts</h1>
+  <p>Red marks the highest category in each chart; the other bars are blue.</p>
+
+  <h2>Chart 1: Average Body Mass by Species</h2>
+  <p id="massAnswer" class="answer"></p>
+  <svg id="massChart" width="720" height="390" role="img" aria-label="Average body mass by penguin species"></svg>
+
+  <h2>Chart 2: Number of Penguins per Island</h2>
+  <p id="islandAnswer" class="answer"></p>
+  <svg id="islandChart" width="720" height="390" role="img" aria-label="Number of penguins per island"></svg>
+
+  <script>
+    const width = 720;
+    const height = 390;
+    const margin = { top: 25, right: 25, bottom: 65, left: 85 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    function drawBarChart(svgSelector, data, categoryKey, valueKey, valueLabel, answerSelector, formatValue) {
+      const svg = d3.select(svgSelector);
+      const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      const maxValue = d3.max(data, d => d[valueKey]);
+      const winner = data.find(d => d[valueKey] === maxValue);
+      const x = d3.scaleBand().domain(data.map(d => d[categoryKey])).range([0, innerWidth]).padding(0.25);
+      const y = d3.scaleLinear().domain([0, maxValue * 1.12]).nice().range([innerHeight, 0]);
+
+      chart.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+      chart.append("g").call(d3.axisLeft(y));
+
+      chart.selectAll("rect")
+        .data(data)
+        .join("rect")
+        .attr("x", d => x(d[categoryKey]))
+        .attr("y", d => y(d[valueKey]))
+        .attr("width", x.bandwidth())
+        .attr("height", d => innerHeight - y(d[valueKey]))
+        .attr("fill", d => d[categoryKey] === winner[categoryKey] ? "red" : "steelblue");
+
+      chart.selectAll("text.value-label")
+        .data(data)
+        .join("text")
+        .attr("class", "value-label")
+        .attr("x", d => x(d[categoryKey]) + x.bandwidth() / 2)
+        .attr("y", d => y(d[valueKey]) - 8)
+        .attr("text-anchor", "middle")
+        .attr("font-size", 12)
+        .text(d => formatValue(d[valueKey]));
+
+      svg.append("text")
+        .attr("x", margin.left + innerWidth / 2)
+        .attr("y", height - 10)
+        .attr("text-anchor", "middle")
+        .attr("font-weight", "bold")
+        .text(categoryKey === "species" ? "Penguin species" : "Island");
+
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerHeight / 2))
+        .attr("y", 22)
+        .attr("text-anchor", "middle")
+        .attr("font-weight", "bold")
+        .text(valueLabel);
+
+      d3.select(answerSelector).text(`Answer: ${winner[categoryKey]} has the highest ${valueLabel.toLowerCase()} (${formatValue(maxValue)}).`);
+    }
+
+    d3.csv("dataset/penguins.csv", d3.autoType).then(data => {
+      const massRows = data.filter(d => d.species && Number.isFinite(d.body_mass_g));
+      const massSummary = Array.from(
+        d3.rollup(massRows, rows => d3.mean(rows, d => d.body_mass_g), d => d.species),
+        ([species, averageBodyMass]) => ({ species, averageBodyMass })
+      );
+
+      const islandRows = data.filter(d => d.island);
+      const islandSummary = Array.from(
+        d3.rollup(islandRows, rows => rows.length, d => d.island),
+        ([island, count]) => ({ island, count })
+      );
+
+      drawBarChart("#massChart", massSummary, "species", "averageBodyMass", "Average body mass (g)", "#massAnswer", value => `${Math.round(value).toLocaleString()} g`);
+      drawBarChart("#islandChart", islandSummary, "island", "count", "Penguin count", "#islandAnswer", value => value.toLocaleString());
+    }).catch(error => {
+      console.error("Could not load dataset/penguins.csv:", error);
+      d3.select("body").append("p").attr("class", "answer").text("Error loading CSV. Run this file using VS Code Live Server and check the dataset path.");
+    });
+  </script>
+</body>
+</html>

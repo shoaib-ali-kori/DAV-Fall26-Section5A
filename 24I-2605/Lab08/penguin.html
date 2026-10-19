@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAV Lab 8 - Task 1: Penguin Analysis</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 28px; color: #222; }
+    h1 { margin-bottom: 8px; }
+    .controls { display: flex; gap: 18px; flex-wrap: wrap; margin: 18px 0; }
+    label { font-weight: 600; }
+    select { margin-left: 8px; padding: 6px; }
+    svg { display: block; max-width: 100%; overflow: visible; }
+    .answer { color: #d71920; font-weight: 700; }
+    .note { color: #555; }
+    .axis text { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Task 1: Penguin Analysis</h1>
+  <p>Red highlights the category with the highest average for the selected measure.</p>
+  <div class="controls">
+    <label>Group by:
+      <select id="groupBy">
+        <option value="species" selected>Species</option>
+        <option value="island">Island</option>
+      </select>
+    </label>
+    <label>Measure:
+      <select id="measure">
+        <option value="body_mass_g" selected>Body mass (g)</option>
+        <option value="flipper_length_mm">Flipper length (mm)</option>
+      </select>
+    </label>
+  </div>
+  <p id="answer" class="answer" aria-live="polite"></p>
+  <svg id="chart" width="760" height="470" role="img" aria-label="Bar chart of penguin measurements"></svg>
+  <p class="note">Dataset: dataset/penguins.csv</p>
+
+  <script>
+    const svg = d3.select("#chart");
+    const width = 760;
+    const height = 470;
+    const margin = { top: 35, right: 30, bottom: 75, left: 90 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+    const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const xAxisGroup = chart.append("g").attr("transform", `translate(0,${innerHeight})`);
+    const yAxisGroup = chart.append("g");
+    const xLabel = svg.append("text").attr("x", margin.left + innerWidth / 2).attr("y", height - 12).attr("text-anchor", "middle").attr("font-weight", "bold");
+    const yLabel = svg.append("text").attr("transform", "rotate(-90)").attr("x", -(margin.top + innerHeight / 2)).attr("y", 24).attr("text-anchor", "middle").attr("font-weight", "bold");
+
+    d3.csv("dataset/penguins.csv", d3.autoType).then(data => {
+      const groupSelect = d3.select("#groupBy");
+      const measureSelect = d3.select("#measure");
+
+      function drawChart() {
+        const groupKey = groupSelect.property("value");
+        const measureKey = measureSelect.property("value");
+        const valid = data.filter(d => d[groupKey] && Number.isFinite(d[measureKey]));
+        const summary = Array.from(
+          d3.rollup(valid, rows => d3.mean(rows, d => d[measureKey]), d => d[groupKey]),
+          ([category, average]) => ({ category, average })
+        );
+        const maximum = d3.max(summary, d => d.average);
+        const winner = summary.find(d => d.average === maximum);
+        const unit = measureKey === "body_mass_g" ? "g" : "mm";
+        const measureName = measureKey === "body_mass_g" ? "Average body mass" : "Average flipper length";
+
+        d3.select("#answer").text(`Answer: ${winner.category} has the highest ${measureName.toLowerCase()} (${maximum.toFixed(1)} ${unit}).`);
+        xLabel.text(groupKey === "species" ? "Penguin species" : "Island");
+        yLabel.text(`${measureName} (${unit})`);
+
+        const x = d3.scaleBand().domain(summary.map(d => d.category)).range([0, innerWidth]).padding(0.25);
+        const y = d3.scaleLinear().domain([0, maximum * 1.12]).nice().range([innerHeight, 0]);
+
+        xAxisGroup.call(d3.axisBottom(x));
+        yAxisGroup.call(d3.axisLeft(y));
+
+        const bars = chart.selectAll("rect").data(summary, d => d.category);
+        bars.exit().remove();
+        bars.enter().append("rect").merge(bars)
+          .attr("x", d => x(d.category))
+          .attr("y", d => y(d.average))
+          .attr("width", x.bandwidth())
+          .attr("height", d => innerHeight - y(d.average))
+          .attr("fill", d => d.category === winner.category ? "red" : "steelblue");
+
+        const labels = chart.selectAll("text.value-label").data(summary, d => d.category);
+        labels.exit().remove();
+        labels.enter().append("text").attr("class", "value-label").merge(labels)
+          .attr("x", d => x(d.category) + x.bandwidth() / 2)
+          .attr("y", d => y(d.average) - 8)
+          .attr("text-anchor", "middle")
+          .attr("font-size", 12)
+          .text(d => d.average.toFixed(1));
+      }
+
+      groupSelect.on("change", drawChart);
+      measureSelect.on("change", drawChart);
+      drawChart();
+    }).catch(error => {
+      console.error("Could not load dataset/penguins.csv:", error);
+      d3.select("body").append("p").attr("class", "answer").text("Error loading CSV. Run this file using VS Code Live Server and check the dataset path.");
+    });
+  </script>
+</body>
+</html>
