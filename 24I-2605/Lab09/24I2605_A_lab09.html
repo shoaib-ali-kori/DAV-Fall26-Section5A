@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAST Data Analysis and Visualization — Lab 9</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Arial, sans-serif; color:#1f2937; background:#f3f6fa; }
+  header { background:#198f77; color:white; padding:24px 18px; text-align:center; }
+  header h1 { margin:0 0 8px; font-size:clamp(22px,3vw,32px); }
+  header p { margin:0; color:#dbeafe; }
+  nav { position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; padding:12px; background:white; box-shadow:0 2px 8px #0001; }
+  nav a { text-decoration:none; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:7px; padding:8px 11px; font-size:14px; }
+  nav a:hover { background:#eff6ff; }
+  main { max-width:1250px; margin:auto; padding:18px; }
+  section { background:white; margin:0 0 22px; padding:18px; border-radius:12px; box-shadow:0 2px 9px #0f172a0d; }
+  h2 { margin:0 0 8px; color:#1e3a8a; }
+  .description { color:#4b5563; margin:0 0 14px; line-height:1.5; }
+  .chart-wrap { width:100%; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+  svg { display:block; max-width:100%; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin:12px 0; font-size:13px; }
+  .legend-item { display:inline-flex; align-items:center; gap:6px; }
+  .swatch { width:14px; height:14px; display:inline-block; border-radius:3px; }
+  .tooltip { position:fixed; z-index:20; display:none; pointer-events:none; background:#111827; color:#fff; padding:9px 11px; border-radius:6px; font-size:13px; line-height:1.5; box-shadow:0 4px 15px #0003; max-width:260px; }
+  .hint { font-size:13px; color:#64748b; }
+  .node-label { font-size:12px; fill:#1f2937; pointer-events:none; }
+  .tree-link { fill:none; stroke:#94a3b8; stroke-width:1.5px; }
+  .course-rect { stroke:white; stroke-width:2; cursor:pointer; }
+  .map-country { stroke:#fff; stroke-width:.5px; }
+  .map-country:hover { stroke:#111827; stroke-width:1.8px; }
+  button { border:1px solid #cbd5e1; background:#f8fafc; padding:7px 10px; border-radius:6px; cursor:pointer; }
+  button:hover { background:#e2e8f0; }
+  .status { color:#b91c1c; font-size:14px; }
+  footer { text-align:center; color:#64748b; padding:8px 15px 28px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Data Analysis and Visualization — Lab Manual 9</h1>
+  <p>Hierarchical, network and geospatial visualizations using D3.js</p>
+</header>
+<nav>
+  <a href="#task1">Task 1: Treemap</a>
+  <a href="#task2">Task 2: Dendrogram</a>
+  <a href="#task3">Task 3: Flight Network</a>
+  <a href="#task4">Task 4: Population Map</a>
+  <a href="#task5">Task 5: Pakistan Cities</a>
+  <a href="#task6">Task 6: Combined Map</a>
+</nav>
+<main>
+<section id="task1">
+  <h2>Task 1: Course Enrollment Treemap</h2>
+  <p class="description">Each course rectangle represents student enrollment. Courses are grouped by department, and hovering shows course details.</p>
+  <div id="legend1" class="legend"></div>
+  <div class="chart-wrap"><svg id="treemap" width="1100" height="610" role="img" aria-label="Course enrollment treemap"></svg></div>
+  <p class="hint">Larger rectangles mean more students. Department colors are shown in the legend.</p>
+</section>
+
+<section id="task2">
+  <h2>Task 2: University Structure Dendrogram</h2>
+  <p class="description">A horizontal tree of the university, departments and courses. Click a department node or label to collapse or expand its courses.</p>
+  <div class="legend">
+    <span class="legend-item"><span class="swatch" style="background:#dc2626"></span>University (root)</span>
+    <span class="legend-item"><span class="swatch" style="background:#2563eb"></span>Department</span>
+    <span class="legend-item"><span class="swatch" style="background:#16a34a"></span>Course</span>
+  </div>
+  <div class="chart-wrap"><svg id="dendrogram" width="1100" height="650" role="img" aria-label="University structure dendrogram"></svg></div>
+</section>
+
+<section id="task3">
+  <h2>Task 3: Flight Route Network</h2>
+  <p class="description">Cities are nodes, and flight routes are links. Link thickness shows weekly flights; node size shows the number of routes connected to that city. Drag nodes to rearrange the network.</p>
+  <div class="chart-wrap"><svg id="network" width="1100" height="650" role="img" aria-label="Flight route network"></svg></div>
+  <p class="hint">Hover over a city to highlight its routes and fade unrelated routes. Drag a city to reposition it.</p>
+</section>
+
+<section id="task4">
+  <h2>Task 4: World Population Choropleth</h2>
+  <p class="description">Countries are colored by population in millions. The population CSV is joined to country features by ISO-3 country code. Countries without a matching value are light gray.</p>
+  <div id="legend4" class="legend"></div>
+  <div id="map4" class="chart-wrap"></div>
+  <p id="map4status" class="status"></p>
+</section>
+
+<section id="task5">
+  <h2>Task 5: Pakistan Cities Point Map</h2>
+  <p class="description">Circle area represents city population. Only cities with population above 1 million are labelled; hover over any city to see its full details.</p>
+  <div class="legend">
+    <span class="legend-item"><span class="swatch" style="background:#2563eb"></span>City location (circle area represents population)</span>
+  </div>
+  <div id="map5" class="chart-wrap"></div>
+</section>
+
+<section id="task6">
+  <h2>Task 6: Combined Spatial Encoding Map</h2>
+  <p class="description">The map combines city location, population, hub status and weekly flight routes. A hub has four or more routes. Hover over a city to highlight its routes and dim the others.</p>
+  <div class="legend">
+    <span class="legend-item"><span class="swatch" style="background:#2563eb"></span>Hub: 4+ routes</span>
+    <span class="legend-item"><span class="swatch" style="background:#f97316"></span>Not a hub: fewer than 4 routes</span>
+    <span class="legend-item">Circle area = population</span>
+    <span class="legend-item">Line width = weekly flights</span>
+  </div>
+  <div id="map6" class="chart-wrap"></div>
+  <p class="hint">Routes are drawn first so the city circles remain visible on top.</p>
+</section>
+</main>
+<div id="tooltip" class="tooltip"></div>
+<footer>FAST School of Computing — Data Analysis and Visualization, Lab 9</footer>
+
+<script>
+const tooltip = d3.select("#tooltip");
+function showTip(event, html) {
+  tooltip.style("display", "block").html(html);
+  moveTip(event);
+}
+function moveTip(event) {
+  tooltip.style("left", Math.min(event.clientX + 12, window.innerWidth - 275) + "px")
+         .style("top", Math.min(event.clientY + 12, window.innerHeight - 110) + "px");
+}
+function hideTip() { tooltip.style("display", "none"); }
+function loadCSV(file) { return d3.csv(file, d3.autoType); }
+
+const departmentNames = ["Computer Science", "Engineering", "Business", "Sciences"];
+const departmentColor = d3.scaleOrdinal()
+  .domain(departmentNames)
+  .range(["#2563eb", "#16a34a", "#ea580c", "#9333ea"]);
+
+// Load the provided CSV files once and build Tasks 1–3, 5 and 6.
+Promise.all([
+  loadCSV("university.csv"),
+  loadCSV("flights.csv"),
+  loadCSV("pakistan_cities.csv"),
+  loadCSV("population.csv")
+]).then(([university, flights, cities, population]) => {
+  drawTreemap(university);
+  drawDendrogram(university);
+  drawNetwork(flights);
+  drawPakistanMap("#map5", cities, false);
+  drawCombinedMap("#map6", cities, flights);
+  drawPopulationMap(population);
+}).catch(error => {
+  console.error("Could not load one or more CSV files:", error);
+  d3.select("main").insert("p", ":first-child")
+    .attr("class", "status")
+    .text("A CSV file could not be loaded. Keep university.csv, flights.csv, pakistan_cities.csv and population.csv in the same folder as this HTML file, then open it with VS Code Live Server.");
+});
+
+function buildUniversityHierarchy(data) {
+  const grouped = d3.group(data, d => d.department);
+  return {
+    name: "University",
+    children: Array.from(grouped, ([department, rows]) => ({
+      name: department,
+      children: rows.map(row => ({ name: row.course, students: +row.students }))
+    }))
+  };
+}
+
+function drawTreemap(data) {
+  const width = 1100, height = 610;
+  const svg = d3.select("#treemap").attr("viewBox", [0, 0, width, height]);
+  const root = d3.hierarchy(buildUniversityHierarchy(data))
+    .sum(d => d.students || 0)
+    .sort((a, b) => b.value - a.value);
+
+  d3.treemap().size([width, height]).paddingOuter(5).paddingInner(3).paddingTop(25)(root);
+
+  const legend = d3.select("#legend1");
+  legend.selectAll("span.legend-item").data(departmentNames).join("span")
+    .attr("class", "legend-item")
+    .html(d => `<span class="swatch" style="background:${departmentColor(d)}"></span>${d}`);
+
+  const groups = svg.selectAll("g.department").data(root.children).join("g").attr("class", "department");
+  groups.append("rect")
+    .attr("x", d => d.x0).attr("y", d => d.y0)
+    .attr("width", d => d.x1 - d.x0).attr("height", d => d.y1 - d.y0)
+    .attr("fill", d => departmentColor(d.data.name)).attr("fill-opacity", 0.12)
+    .attr("stroke", d => departmentColor(d.data.name)).attr("stroke-width", 2);
+  groups.append("text").attr("x", d => d.x0 + 8).attr("y", d => d.y0 + 17)
+    .attr("font-size", 14).attr("font-weight", "bold")
+    .attr("fill", d => departmentColor(d.data.name)).text(d => d.data.name);
+
+  const leaves = root.leaves();
+  svg.selectAll("rect.course-rect").data(leaves).join("rect")
+    .attr("class", "course-rect")
+    .attr("x", d => d.x0).attr("y", d => d.y0)
+    .attr("width", d => Math.max(0, d.x1 - d.x0))
+    .attr("height", d => Math.max(0, d.y1 - d.y0))
+    .attr("fill", d => departmentColor(d.parent.data.name))
+    .on("mouseover", (event, d) => showTip(event,
+      `<strong>Course:</strong> ${d.data.name}<br><strong>Department:</strong> ${d.parent.data.name}<br><strong>Students:</strong> ${d.value}`))
+    .on("mousemove", moveTip).on("mouseout", hideTip);
+
+  svg.selectAll("text.course-label").data(leaves).join("text")
+    .attr("class", "course-label")
+    .attr("x", d => d.x0 + 6).attr("y", d => d.y0 + 18)
+    .attr("fill", "white").attr("font-size", 12).attr("pointer-events", "none")
+    .text(d => d.data.name)
+    .each(function(d) {
+      const maxWidth = d.x1 - d.x0 - 12;
+      const text = d3.select(this);
+      let name = d.data.name;
+      if (maxWidth < 38 || d.y1 - d.y0 < 22) { text.text(""); return; }
+      text.text(name);
+      while (this.getComputedTextLength() > maxWidth && name.length > 4) {
+        name = name.slice(0, -1);
+        text.text(name + "…");
+      }
+      if (this.getComputedTextLength() > maxWidth) text.text("");
+    });
+}
+
+function drawDendrogram(data) {
+  const width = 1100, height = Math.max(650, data.length * 35 + 120);
+  const svg = d3.select("#dendrogram").attr("width", width).attr("height", height)
+    .attr("viewBox", [0, 0, width, height]);
+  const g = svg.append("g").attr("transform", "translate(130,35)");
+  const root = d3.hierarchy(buildUniversityHierarchy(data));
+  const colors = ["#dc2626", "#2563eb", "#16a34a"];
+  function update() {
+    d3.cluster().size([height - 70, width - 320])(root);
+    g.selectAll("path.tree-link").data(root.links(), d => d.target.data.name)
+      .join("path").attr("class", "tree-link")
+      .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+    const node = g.selectAll("g.node").data(root.descendants(), d => d.data.name)
+      .join(enter => {
+        const group = enter.append("g").attr("class", "node");
+        group.append("circle");
+        group.append("text");
+        return group;
+      }, update => update, exit => exit.remove())
+      .attr("transform", d => `translate(${d.y},${d.x})`)
+      .style("cursor", d => d.depth === 1 ? "pointer" : "default");
+    node.select("circle").attr("r", d => d.depth === 0 ? 8 : 5.5)
+      .attr("fill", d => colors[d.depth] || "#16a34a")
+      .attr("stroke", "white").attr("stroke-width", 1.5);
+    node.select("text").attr("x", d => d.depth === 2 ? 9 : -9).attr("y", 4)
+      .attr("text-anchor", d => d.depth === 2 ? "start" : "end")
+      .attr("font-size", 12).text(d => d.data.name);
+    node.on("click", (event, d) => {
+      if (d.depth !== 1) return;
+      if (d.children) { d._children = d.children; d.children = null; }
+      else if (d._children) { d.children = d._children; d._children = null; }
+      update();
+    });
+  }
+  update();
+}
+
+function makeNetworkData(flights) {
+  const byName = new Map();
+  flights.forEach(f => {
+    if (!byName.has(f.source)) byName.set(f.source, {id: f.source, degree: 0});
+    if (!byName.has(f.target)) byName.set(f.target, {id: f.target, degree: 0});
+    byName.get(f.source).degree++;
+    byName.get(f.target).degree++;
+  });
+  return {
+    nodes: Array.from(byName.values()),
+    links: flights.map(d => ({source: d.source, target: d.target, flights: +d.flights}))
+  };
+}
+
+function drawNetwork(flights) {
+  const width = 1100, height = 650;
+  const svg = d3.select("#network").attr("viewBox", [0, 0, width, height]);
+  const {nodes, links} = makeNetworkData(flights);
+  const linkWidth = d3.scaleSqrt().domain(d3.extent(links, d => d.flights)).range([1.5, 7]);
+  const radius = d3.scaleSqrt().domain([0, d3.max(nodes, d => d.degree)]).range([6, 22]);
+  const link = svg.append("g").selectAll("line").data(links).join("line")
+    .attr("stroke", "#94a3b8").attr("stroke-opacity", 0.8)
+    .attr("stroke-width", d => linkWidth(d.flights));
+  const node = svg.append("g").selectAll("g").data(nodes).join("g")
+    .attr("cursor", "grab")
+    .call(d3.drag()
+      .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+  node.append("circle").attr("r", d => radius(d.degree)).attr("fill", "#2563eb")
+    .attr("stroke", "white").attr("stroke-width", 1.5);
+  node.append("text").attr("class", "node-label").attr("x", d => radius(d.degree) + 4)
+    .attr("y", 4).text(d => d.id);
+  node.on("mouseover", (event, d) => {
+    link.attr("stroke-opacity", l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.08)
+      .attr("stroke", l => (l.source.id === d.id || l.target.id === d.id) ? "#f97316" : "#cbd5e1");
+    node.select("circle").attr("opacity", n => n.id === d.id || links.some(l =>
+      (l.source.id || l.source) === d.id && (l.target.id || l.target) === n.id ||
+      (l.target.id || l.target) === d.id && (l.source.id || l.source) === n.id) ? 1 : 0.25);
+    showTip(event, `<strong>${d.id}</strong><br>Routes connected: ${d.degree}`);
+  }).on("mousemove", moveTip).on("mouseout", () => {
+    link.attr("stroke-opacity", 0.8).attr("stroke", "#94a3b8");
+    node.select("circle").attr("opacity", 1);
+    hideTip();
+  });
+  const simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(115).strength(0.65))
+    .force("charge", d3.forceManyBody().strength(-350))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide(d => radius(d.degree) + 8))
+    .on("tick", () => {
+      link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+}
+
+function cityProjection(cities, width, height) {
+  return d3.geoMercator().center([69.5, 30.5]).scale(2600).translate([width / 2, height / 2]);
+}
+async function drawPakistanMap(selector, cities, combined) {
+  const width = 1000, height = 650;
+  const host = d3.select(selector);
+  const svg = host.append("svg").attr("width", width).attr("height", height)
+    .attr("viewBox", [0, 0, width, height]);
+  const projection = cityProjection(cities, width, height);
+  const radius = d3.scaleSqrt().domain([0, d3.max(cities, d => +d.pop)]).range([3, 28]);
+  const g = svg.append("g");
+  try {
+    const geo = await d3.json("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson");
+    const path = d3.geoPath(projection);
+    g.append("g").selectAll("path").data(geo.features).join("path")
+      .attr("d", path).attr("fill", "#e2e8f0").attr("stroke", "#94a3b8")
+      .attr("stroke-width", 0.7);
+  } catch (e) { console.warn("World GeoJSON background could not be loaded for the point map.", e); }
+  g.selectAll("circle").data(cities).join("circle")
+    .attr("cx", d => projection([+d.lon, +d.lat])[0])
+    .attr("cy", d => projection([+d.lon, +d.lat])[1])
+    .attr("r", d => radius(+d.pop))
+    .attr("fill", "#2563eb").attr("fill-opacity", 0.48)
+    .attr("stroke", "#1d4ed8").attr("stroke-width", 1)
+    .on("mouseover", (event, d) => showTip(event, `<strong>${d.name}</strong><br>Population: ${d.pop} million<br>Latitude: ${d.lat}<br>Longitude: ${d.lon}`))
+    .on("mousemove", moveTip).on("mouseout", hideTip);
+  g.selectAll("text").data(cities.filter(d => +d.pop > 1)).join("text")
+    .attr("x", d => projection([+d.lon, +d.lat])[0] + radius(+d.pop) + 3)
+    .attr("y", d => projection([+d.lon, +d.lat])[1] + 4)
+    .attr("font-size", 12).attr("fill", "#1e293b").text(d => d.name);
+}
+
+async function drawCombinedMap(selector, cities, flights) {
+  const width = 1000, height = 650;
+  const svg = d3.select(selector).append("svg").attr("width", width).attr("height", height)
+    .attr("viewBox", [0, 0, width, height]);
+  const projection = cityProjection(cities, width, height);
+  try {
+    const geo = await d3.json("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson");
+    svg.append("g").selectAll("path").data(geo.features).join("path")
+      .attr("d", d3.geoPath(projection)).attr("fill", "#e2e8f0")
+      .attr("stroke", "#94a3b8").attr("stroke-width", 0.7);
+  } catch (e) { console.warn("World GeoJSON background could not be loaded for the combined map.", e); }
+  const cityByName = new Map(cities.map(d => [d.name, d]));
+  const network = makeNetworkData(flights);
+  const degree = new Map(network.nodes.map(d => [d.id, d.degree]));
+  const radius = d3.scaleSqrt().domain([0, d3.max(cities, d => +d.pop)]).range([3, 27]);
+  const lineWidth = d3.scaleSqrt().domain(d3.extent(flights, d => +d.flights)).range([1, 6]);
+  const links = flights.map(f => ({...f, a: cityByName.get(f.source), b: cityByName.get(f.target)}))
+    .filter(d => d.a && d.b);
+  const route = svg.append("g").selectAll("line").data(links).join("line")
+    .attr("x1", d => projection([+d.a.lon, +d.a.lat])[0])
+    .attr("y1", d => projection([+d.a.lon, +d.a.lat])[1])
+    .attr("x2", d => projection([+d.b.lon, +d.b.lat])[0])
+    .attr("y2", d => projection([+d.b.lon, +d.b.lat])[1])
+    .attr("stroke", "#64748b").attr("stroke-opacity", 0.55)
+    .attr("stroke-width", d => lineWidth(+d.flights));
+  const points = svg.append("g").selectAll("g.city").data(cities).join("g").attr("class", "city");
+  points.append("circle")
+    .attr("cx", d => projection([+d.lon, +d.lat])[0])
+    .attr("cy", d => projection([+d.lon, +d.lat])[1])
+    .attr("r", d => radius(+d.pop))
+    .attr("fill", d => (degree.get(d.name) || 0) >= 4 ? "#2563eb" : "#f97316")
+    .attr("fill-opacity", 0.8).attr("stroke", "white").attr("stroke-width", 1.5);
+  points.append("text")
+    .attr("x", d => projection([+d.lon, +d.lat])[0] + radius(+d.pop) + 3)
+    .attr("y", d => projection([+d.lon, +d.lat])[1] + 4)
+    .attr("font-size", 11).attr("fill", "#111827").text(d => d.name);
+  points.on("mouseover", (event, d) => {
+    route.attr("stroke-opacity", l => l.source === d.name || l.target === d.name ? 1 : 0.06)
+      .attr("stroke", l => l.source === d.name || l.target === d.name ? "#dc2626" : "#94a3b8");
+    points.select("circle").attr("opacity", c => c.name === d.name ? 1 : 0.35);
+    showTip(event, `<strong>${d.name}</strong><br>Population: ${d.pop} million<br>Routes connected: ${degree.get(d.name) || 0}<br>Hub: ${(degree.get(d.name) || 0) >= 4 ? "Yes (4+ routes)" : "No"}`);
+  }).on("mousemove", moveTip).on("mouseout", () => {
+    route.attr("stroke-opacity", 0.55).attr("stroke", "#64748b");
+    points.select("circle").attr("opacity", 1);
+    hideTip();
+  });
+}
+
+async function drawPopulationMap(population) {
+  const status = d3.select("#map4status");
+  try {
+    // GeoJSON country features include ISO-3 codes in properties.ISO3166-1-Alpha-3.
+    const geo = await d3.json("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson");
+    const width = 1100, height = 600;
+    const svg = d3.select("#map4").append("svg").attr("width", width).attr("height", height)
+      .attr("viewBox", [0, 0, width, height]);
+    const popByCode = new Map(population.map(d => [String(d.id).toUpperCase(), +d.population_millions]));
+    const nameByCode = new Map(population.map(d => [String(d.id).toUpperCase(), d.country]));
+    const valueExtent = d3.extent(population, d => +d.population_millions);
+    const color = d3.scaleSequentialSqrt(d3.interpolateYlOrRd).domain(valueExtent);
+    const projection = d3.geoNaturalEarth1().fitExtent([[8, 8], [width - 8, height - 8]], geo);
+    const path = d3.geoPath(projection);
+    const codeOf = f => {
+      const p = f.properties || {};
+      return String(p["ISO3166-1-Alpha-3"] || p.ISO_A3 || p.ADM0_A3 || "").toUpperCase();
+    };
+    svg.selectAll("path.country").data(geo.features).join("path")
+      .attr("class", "map-country")
+      .attr("d", path)
+      .attr("fill", f => {
+        const value = popByCode.get(codeOf(f));
+        return value == null ? "#e5e7eb" : color(value);
+      })
+      .on("mouseover", (event, f) => {
+        const code = codeOf(f);
+        const value = popByCode.get(code);
+        const country = nameByCode.get(code) || f.properties.ADMIN || f.properties.name || "Unknown country";
+        d3.select(event.currentTarget).attr("stroke", "#111827").attr("stroke-width", 1.8);
+        showTip(event, `<strong>${country}</strong><br>Population: ${value == null ? "No data" : value.toLocaleString() + " million"}`);
+      })
+      .on("mousemove", moveTip)
+      .on("mouseout", event => {
+        d3.select(event.currentTarget).attr("stroke", "#fff").attr("stroke-width", 0.5);
+        hideTip();
+      });
+    const legend = d3.select("#legend4");
+    const steps = d3.range(6).map(i => valueExtent[0] + i * (valueExtent[1] - valueExtent[0]) / 5);
+    legend.selectAll("span.legend-item").data(steps).join("span")
+      .attr("class", "legend-item")
+      .html(v => `<span class="swatch" style="background:${color(v)}"></span>${Math.round(v)} million`);
+    legend.append("span").attr("class", "legend-item")
+      .html('<span class="swatch" style="background:#e5e7eb"></span>No data');
+    status.text("");
+  } catch (error) {
+    console.error("Could not load the world GeoJSON:", error);
+    status.text("The world map could not load. Check your internet connection; the map uses an online GeoJSON file.");
+  }
+}
+</script>
+</body>
+</html>
