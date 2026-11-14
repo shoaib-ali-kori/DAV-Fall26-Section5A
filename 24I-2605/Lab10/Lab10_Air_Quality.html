@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lab 10 - Air Quality Time Series</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 25px; color: #222; }
+h1 { text-align: center; }
+.chart { margin: 30px 0 55px; }
+svg { max-width: 100%; height: auto; }
+.axis path, .axis line { stroke: #777; }
+.legend { font-size: 13px; }
+.subtitle { font-size: 14px; margin-top: -8px; margin-bottom: 12px; }
+button { padding: 8px 14px; margin-bottom: 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Air Quality Analysis 2025</h1>
+<div id="task1" class="chart"></div>
+<div id="task2" class="chart"></div>
+<div id="task3" class="chart"></div>
+<div id="task4" class="chart"></div>
+<div id="task5" class="chart"></div>
+<div id="task6" class="chart"></div>
+<div id="task7" class="chart"></div>
+<div id="task8" class="chart"></div>
+<div id="task9" class="chart"></div>
+
+<script>
+const width = 900;
+const height = 420;
+const margin = {top: 50, right: 100, bottom: 55, left: 70};
+const innerWidth = width - margin.left - margin.right;
+const innerHeight = height - margin.top - margin.bottom;
+const parseDate = d3.timeParse("%Y-%m-%d");
+const formatDate = d3.timeFormat("%d %b %Y");
+const monthFormat = d3.timeFormat("%b");
+const monthKey = d3.timeFormat("%Y-%m");
+
+function createSVG(id, title, subtitle = "") {
+    const container = d3.select(id);
+    container.append("h2").text(title);
+    if (subtitle) container.append("div").attr("class", "subtitle").text(subtitle);
+
+    return container.append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+}
+
+d3.csv("air_quality_2025.csv", d => ({
+    date: parseDate(d.date),
+    pm25_city: +d.pm25_city,
+    pm25_suburb: +d.pm25_suburb,
+    temp_c: +d.temp_c
+})).then(data => {
+
+    data.sort((a, b) => d3.ascending(a.date, b.date));
+
+    // Task 1
+    const firstDate = d3.min(data, d => d.date);
+    const lastDate = d3.max(data, d => d.date);
+    const expectedDays = d3.timeDay.count(new Date(2025, 0, 1), new Date(2026, 0, 1));
+    const missingDays = expectedDays - data.length;
+
+    d3.select("#task1").append("h2").text("Task 1: Data Inspection");
+    d3.select("#task1").append("p").html(
+        `<b>Rows:</b> ${data.length}<br>` +
+        `<b>First date:</b> ${formatDate(firstDate)}<br>` +
+        `<b>Last date:</b> ${formatDate(lastDate)}<br>` +
+        `<b>Days in 2025:</b> ${expectedDays}<br>` + 
+        `<b>Notice:</b> The dataset has ${missingDays} fewer rows than the 365 days in 2025, so some dates are missing.`
+    );
+
+    // Task 2
+    const above15 = data.filter(d => d.pm25_city > 15).length;
+    const above75 = data.filter(d => d.pm25_city > 75).length;
+    const highestDays = [...data].sort((a, b) => d3.descending(a.pm25_city, b.pm25_city)).slice(0, 2);
+
+    let g = createSVG("#task2", "Task 2: Daily City PM2.5",
+        `Days above 15 µg/m³: ${above15} | Days above 75 µg/m³: ${above75}`);
+
+    let x = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, innerWidth]);
+
+    let y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.pm25_city) + 25])
+        .range([innerHeight, 0]);
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x));
+    g.append("g").call(d3.axisLeft(y));
+
+    g.append("path")
+        .datum(data)
+        .attr("fill", "none")
+        .attr("stroke", "#1f77b4")
+        .attr("stroke-width", 2)
+        .attr("d", d3.line().x(d => x(d.date)).y(d => y(d.pm25_city)));
+
+    [15, 75].forEach(value => {
+        g.append("line")
+            .attr("x1", 0).attr("x2", innerWidth)
+            .attr("y1", y(value)).attr("y2", y(value))
+            .attr("stroke", value === 15 ? "#2ca02c" : "#d62728")
+            .attr("stroke-dasharray", "6,4");
+
+        g.append("text")
+            .attr("x", innerWidth - 5)
+            .attr("y", y(value) - 5)
+            .attr("text-anchor", "end")
+            .attr("font-size", 12)
+            .text(`${value} µg/m³`);
+    });
+
+    g.selectAll(".highest")
+        .data(highestDays)
+        .enter().append("circle")
+        .attr("cx", d => x(d.date))
+        .attr("cy", d => y(d.pm25_city))
+        .attr("r", 5)
+        .attr("fill", "#d62728");
+
+    g.selectAll(".highestLabel")
+        .data(highestDays)
+        .enter().append("text")
+        .attr("x", d => x(d.date))
+        .attr("y", d => y(d.pm25_city) - 10)
+        .attr("text-anchor", "middle")
+        .attr("font-size", 12)
+        .text(d => `${formatDate(d.date)}: ${d.pm25_city}`);
+
+    // Task 3
+    let runningTotal = 0;
+    const cumulative = data.map(d => {
+        if (d.pm25_city > 75) runningTotal++;
+        return {...d, total: runningTotal};
+    });
+
+    g = createSVG("#task3", "Task 3: Build-up of Unhealthy Days");
+    x = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([0, innerWidth]);
+    y = d3.scaleLinear().domain([0, d3.max(cumulative, d => d.total)]).nice().range([innerHeight, 0]);
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+    g.append("g").call(d3.axisLeft(y));
+
+    g.append("path")
+        .datum(cumulative)
+        .attr("fill", "#9ecae1")
+        .attr("d", d3.area()
+            .x(d => x(d.date))
+            .y0(innerHeight)
+            .y1(d => y(d.total)));
+
+    g.append("path")
+        .datum(cumulative)
+        .attr("fill", "none")
+        .attr("stroke", "#1f77b4")
+        .attr("stroke-width", 2)
+        .attr("d", d3.line().x(d => x(d.date)).y(d => y(d.total)));
+
+    // Task 4
+    g = createSVG("#task4", "Task 4: City and Suburb Comparison");
+    x = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([0, innerWidth]);
+    y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => Math.max(d.pm25_city, d.pm25_suburb)) + 20])
+        .range([innerHeight, 0]);
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+    g.append("g").call(d3.axisLeft(y));
+
+    const series = [
+        {name: "City Centre", key: "pm25_city", color: "#1f77b4"},
+        {name: "Suburb", key: "pm25_suburb", color: "#ff7f0e"}
+    ];
+
+    series.forEach(s => {
+        g.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", s.color)
+            .attr("stroke-width", 2)
+            .attr("d", d3.line().x(d => x(d.date)).y(d => y(d[s.key])));
+    });
+
+    const legend4 = g.append("g").attr("transform", `translate(${innerWidth - 110},10)`);
+    series.forEach((s, i) => {
+        legend4.append("line")
+            .attr("x1", 0).attr("x2", 20).attr("y1", i * 25).attr("y2", i * 25)
+            .attr("stroke", s.color).attr("stroke-width", 3);
+        legend4.append("text").attr("x", 28).attr("y", i * 25 + 4).attr("font-size", 12).text(s.name);
+    });
+
+    // Task 5
+    const levels = [
+        {name: "Low", color: "#c6dbef"},
+        {name: "Moderate", color: "#6baed6"},
+        {name: "High", color: "#3182bd"},
+        {name: "Severe", color: "#08519c"}
+    ];
+
+    function pollutionLevel(value) {
+        if (value <= 35) return "Low";
+        if (value <= 75) return "Moderate";
+        if (value <= 150) return "High";
+        return "Severe";
+    }
+
+    const monthGroups = d3.rollup(
+        data,
+        values => {
+            const counts = {Low: 0, Moderate: 0, High: 0, Severe: 0};
+            values.forEach(d => counts[pollutionLevel(d.pm25_city)]++);
+            return counts;
+        },
+        d => monthKey(d.date)
+    );
+
+    const stackedData = Array.from(monthGroups, ([month, counts]) => ({month, ...counts}));
+    const stack = d3.stack().keys(levels.map(d => d.name))(stackedData);
+
+    const height5 = 420;
+    const svg5 = d3.select("#task5").append("h2").text("Task 5: Monthly Pollution Levels")
+        .selection().append("svg").attr("width", width).attr("height", height5);
+
+    const g5 = svg5.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const x5 = d3.scaleBand().domain(stackedData.map(d => d.month)).range([0, innerWidth]).padding(0.15);
+    const y5 = d3.scaleLinear().domain([0, 31]).range([innerHeight, 0]);
+    const color5 = d3.scaleOrdinal().domain(levels.map(d => d.name)).range(levels.map(d => d.color));
+
+    g5.append("g").attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x5).tickFormat(d => monthFormat(new Date(d + "-01"))));
+    g5.append("g").call(d3.axisLeft(y5));
+
+    g5.selectAll(".layer")
+        .data(stack)
+        .enter().append("g")
+        .attr("fill", d => color5(d.key))
+        .selectAll("rect")
+        .data(d => d)
+        .enter().append("rect")
+        .attr("x", d => x5(d.data.month))
+        .attr("y", d => y5(d[1]))
+        .attr("height", d => y5(d[0]) - y5(d[1]))
+        .attr("width", x5.bandwidth());
+
+    const legend5 = g5.append("g").attr("transform", `translate(${innerWidth - 80},0)`);
+    levels.forEach((level, i) => {
+        legend5.append("rect").attr("x", 0).attr("y", i * 22).attr("width", 14).attr("height", 14).attr("fill", level.color);
+        legend5.append("text").attr("x", 20).attr("y", i * 22 + 12).attr("font-size", 12).text(level.name);
+    });
+
+    // Task 6
+    const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const heatData = [];
+    const groupedHeat = d3.rollup(
+        data,
+        values => d3.mean(values, d => d.pm25_city),
+        d => monthKey(d.date),
+        d => weekdays[d.date.getDay()]
+    );
+
+    Array.from(groupedHeat, ([month, dayMap]) => {
+        weekdays.forEach(day => heatData.push({month, day, value: dayMap.get(day)}));
+    });
+
+    const heatWidth = 900, heatHeight = 470;
+    d3.select("#task6").append("h2").text("Task 6: Month and Day-of-Week Heatmap");
+    const svg6 = d3.select("#task6").append("svg").attr("width", heatWidth).attr("height", heatHeight);
+    const g6 = svg6.append("g").attr("transform", "translate(100,40)");
+    const x6 = d3.scaleBand().domain(weekdays).range([0, 650]).padding(0.03);
+    const y6 = d3.scaleBand().domain(stackedData.map(d => d.month)).range([0, 360]).padding(0.03);
+    const color6 = d3.scaleSequential(d3.interpolateYlOrRd)
+        .domain(d3.extent(heatData.filter(d => d.value !== undefined), d => d.value));
+
+    g6.selectAll("rect")
+        .data(heatData)
+        .enter().append("rect")
+        .attr("x", d => x6(d.day))
+        .attr("y", d => y6(d.month))
+        .attr("width", x6.bandwidth())
+        .attr("height", y6.bandwidth())
+        .attr("fill", d => d.value === undefined ? "#eee" : color6(d.value));
+
+    g6.append("g").call(d3.axisTop(x6));
+    g6.append("g").call(d3.axisLeft(y6).tickFormat(d => monthFormat(new Date(d + "-01"))));
+
+    const heatLegend = d3.range(0, 100).map(i => ({
+        value: d3.interpolateNumber(...color6.domain())(i / 99),
+        y: i
+    }));
+
+    g6.selectAll(".heatLegend")
+        .data(heatLegend)
+        .enter().append("rect")
+        .attr("x", 680).attr("y", d => 360 - d.y * 3.6)
+        .attr("width", 20).attr("height", 4)
+        .attr("fill", d => color6(d.value));
+
+    g6.append("text").attr("x", 675).attr("y", 385).attr("font-size", 11).text("Low");
+    g6.append("text").attr("x", 675).attr("y", -5).attr("font-size", 11).text("High");
+
+    // Task 7
+    const monthlyStats = Array.from(d3.rollup(
+        data,
+        values => ({
+            min: d3.min(values, d => d.pm25_city),
+            max: d3.max(values, d => d.pm25_city),
+            mean: d3.mean(values, d => d.pm25_city)
+        }),
+        d => monthKey(d.date)
+    ), ([month, values]) => ({month, ...values}));
+
+    g = createSVG("#task7", "Task 7: Monthly Spread and Mean");
+    const x7 = d3.scalePoint().domain(monthlyStats.map(d => d.month)).range([0, innerWidth]).padding(0.5);
+    const y7 = d3.scaleLinear().domain([0, d3.max(monthlyStats, d => d.max) + 20]).range([innerHeight, 0]);
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x7).tickFormat(d => monthFormat(new Date(d + "-01"))));
+    g.append("g").call(d3.axisLeft(y7));
+
+    g.append("path")
+        .datum(monthlyStats)
+        .attr("fill", "#c6dbef")
+        .attr("opacity", 0.8)
+        .attr("d", d3.area().x(d => x7(d.month)).y0(d => y7(d.min)).y1(d => y7(d.max)));
+
+    g.append("path")
+        .datum(monthlyStats)
+        .attr("fill", "none")
+        .attr("stroke", "#08519c")
+        .attr("stroke-width", 3)
+        .attr("d", d3.line().x(d => x7(d.month)).y(d => y7(d.mean)));
+
+    // Task 8
+    const withAverage = data.map((d, i) => {
+        const values = [];
+        for (let j = Math.max(0, i - 6); j <= i; j++) {
+            if (j > Math.max(0, i - 6) && d3.timeDay.count(data[j - 1].date, data[j].date) > 1) values.length = 0;
+            values.push(data[j].pm25_city);
+        }
+        return {...d, average: values.length === 7 ? d3.mean(values) : undefined};
+    });
+
+    const gaps = [];
+    for (let i = 1; i < data.length; i++) {
+        const daysBetween = d3.timeDay.count(data[i - 1].date, data[i].date);
+        if (daysBetween > 1) {
+            gaps.push({
+                start: d3.timeDay.offset(data[i - 1].date, 1),
+                end: data[i].date,
+                missing: daysBetween - 1
+            });
+        }
+    }
+
+    g = createSVG("#task8", "Task 8: Trend and Data Quality");
+    const x8 = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([0, innerWidth]);
+    const y8 = d3.scaleLinear().domain([0, d3.max(data, d => d.pm25_city) + 20]).range([innerHeight, 0]);
+
+    gaps.forEach(gap => {
+        g.append("rect")
+            .attr("x", x8(gap.start))
+            .attr("y", 0)
+            .attr("width", x8(gap.end) - x8(gap.start))
+            .attr("height", innerHeight)
+            .attr("fill", "#ddd");
+
+        g.append("text")
+            .attr("x", x8(gap.start) + 4)
+            .attr("y", 15)
+            .attr("font-size", 11)
+            .text(`No data: sensor offline (${gap.missing} days)`);
+    });
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x8));
+    g.append("g").call(d3.axisLeft(y8));
+
+    g.append("path")
+        .datum(data)
+        .attr("fill", "none")
+        .attr("stroke", "#999")
+        .attr("stroke-opacity", 0.5)
+        .attr("stroke-width", 1)
+        .attr("d", d3.line()
+            .defined((d, i) => i === 0 || d3.timeDay.count(data[i - 1].date, d.date) === 1)
+            .x(d => x8(d.date))
+            .y(d => y8(d.pm25_city)));
+
+    g.append("path")
+        .datum(withAverage)
+        .attr("fill", "none")
+        .attr("stroke", "#111")
+        .attr("stroke-width", 3)
+        .attr("d", d3.line()
+            .defined((d, i) => d.average !== undefined && (i === 0 || d3.timeDay.count(data[i - 1].date, d.date) === 1))
+            .x(d => x8(d.date))
+            .y(d => y8(d.average)));
+
+    // Task 9
+    d3.select("#task9").append("h2").text("Task 9: Zoomable Air Quality Chart");
+    d3.select("#task9").append("button").attr("id", "reset").text("Reset Full Year");
+
+    const mainHeight = 330, overviewHeight = 100;
+    const svg9 = d3.select("#task9").append("svg")
+        .attr("width", width)
+        .attr("height", mainHeight + overviewHeight + 90);
+
+    const mainG = svg9.append("g").attr("transform", `translate(${margin.left},40)`);
+    const overviewG = svg9.append("g").attr("transform", `translate(${margin.left},${mainHeight + 60})`);
+
+    const xMain = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([0, innerWidth]);
+    const yMain = d3.scaleLinear().domain([0, d3.max(data, d => d.pm25_city) + 20]).range([mainHeight - 70, 0]);
+    const xOverview = d3.scaleTime().domain(xMain.domain()).range([0, innerWidth]);
+    const yOverview = d3.scaleLinear().domain(yMain.domain()).range([overviewHeight, 0]);
+
+    const xAxisMain = mainG.append("g").attr("transform", `translate(0,${mainHeight - 70})`).call(d3.axisBottom(xMain));
+    mainG.append("g").call(d3.axisLeft(yMain));
+
+    const mainPath = mainG.append("path")
+        .datum(data)
+        .attr("fill", "none")
+        .attr("stroke", "#1f77b4")
+        .attr("stroke-width", 2)
+        .attr("d", d3.line().x(d => xMain(d.date)).y(d => yMain(d.pm25_city)));
+
+    overviewG.append("path")
+        .datum(data)
+        .attr("fill", "#c6dbef")
+        .attr("d", d3.area().x(d => xOverview(d.date)).y0(overviewHeight).y1(d => yOverview(d.pm25_city)));
+
+    overviewG.append("g").attr("transform", `translate(0,${overviewHeight})`).call(d3.axisBottom(xOverview));
+
+    const brush = d3.brushX()
+        .extent([[0, 0], [innerWidth, overviewHeight]])
+        .on("brush end", brushed);
+
+    overviewG.append("g").attr("class", "brush").call(brush);
+
+    function brushed(event) {
+        if (!event.selection) return;
+        const selected = event.selection.map(xOverview.invert);
+        xMain.domain(selected);
+        xAxisMain.call(d3.axisBottom(xMain));
+        mainPath.attr("d", d3.line().x(d => xMain(d.date)).y(d => yMain(d.pm25_city)));
+    }
+
+    d3.select("#reset").on("click", () => {
+        xMain.domain(d3.extent(data, d => d.date));
+        xAxisMain.call(d3.axisBottom(xMain));
+        mainPath.attr("d", d3.line().x(d => xMain(d.date)).y(d => yMain(d.pm25_city)));
+        overviewG.select(".brush").call(brush.move, null);
+    });
+});
+</script>
+</body>
+</html>
